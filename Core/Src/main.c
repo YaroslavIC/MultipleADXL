@@ -54,8 +54,8 @@ adxl345_ic_t adxl345spi2;
 uint32_t adxl345_selector;
 
 extern float32_t  fft_2buf_result[ADXL345DATA_DATALENGTH / 2 + 1];
-
-
+float domfreq ;
+int16_t b2zdata[2*ADXL345DATA_DATALENGTH];
 
 /* USER CODE END PV */
 
@@ -153,7 +153,15 @@ int main(void)
 	  ADXL345_FFT(&adxl345spi1);
 	  ADXL345_FFT(&adxl345spi2);
 
-	  ADXL345_2buf_FFT(&adxl345spi1,&adxl345spi2);
+	  //ADXL345_2buf_FFT(&adxl345spi1,&adxl345spi2);
+	//  ADXL345_FFT2buf() ;
+
+	    for (int i = 0; i < ADXL345DATA_DATALENGTH; i++) {
+	    	b2zdata[2*i]     =  ((float32_t)( adxl345spi1.zdata[i] - adxl345spi1.offsetz ))*adxl345spi1.scale;
+	    	b2zdata[2*i+1] =  ((float32_t)( adxl345spi2.zdata[i] - adxl345spi2.offsetz ))*adxl345spi2.scale;
+	    }
+
+	   domfreq = ADXL345_FFT_qwen(b2zdata,2048, 6400);
 
 	  HAL_Delay(1);
 

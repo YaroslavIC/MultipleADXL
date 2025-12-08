@@ -173,13 +173,33 @@ void ADXL345_FFT(adxl345_ic_t *adxl345_ic)  {
  //   };
 
 
+
+
+    float max_val = adxl345_ic->fft_result[1];
+    for (int i = 1; i <  fft_size / 2 + 1  ; i++) {
+      if (adxl345_ic->fft_result[i]  > max_val) {
+    	  max_val = adxl345_ic->fft_result[i];
+    	  adxl345_ic->main_freq =  ((adxl345_ic->fft_samples/2) * i/(fft_size / 2 + 1)) ;
+      }
+
+    }
+
+
 }
 
-void ADXL345_2buf_FFT(adxl345_ic_t *buf1,adxl345_ic_t *buf2)  {
-//void OPM_compute_fft_magnitude(uint16_t* input_buffer, uint32_t length, float32_t* magnitude_buffer) {
+
+
+
+
+
+
+/*
+
+void ADXL345_FFT2buf(adxl345_ic_t *b1,adxl345_ic_t *b2)   {
+
     // Проверка: длина должна быть степенью двойки
 
-	uint32_t length = 2*ADXL345DATA_DATALENGTH;
+	uint32_t length = ADXL345DATA_DATALENGTH;
 
     if ((length & (length - 1)) != 0) {
         // Ошибка: длина не степень двойки
@@ -191,24 +211,17 @@ void ADXL345_2buf_FFT(adxl345_ic_t *buf1,adxl345_ic_t *buf2)  {
     uint32_t fft_size = length;
 
     // Указатели на буферы
-    static float32_t fft_input_buffer[2*ADXL345DATA_DATALENGTH];
-    float32_t fft_output_buffer[2*ADXL345DATA_DATALENGTH];// Реальный и мнимый — чередуются
+    static float32_t fft_input_buffer[ADXL345DATA_DATALENGTH];
+    float32_t fft_output_buffer[ADXL345DATA_DATALENGTH];// Реальный и мнимый — чередуются
 
     // Инициализация FFT
     arm_rfft_fast_instance_f32 fft_instance;
     arm_status status;
 
     // Преобразуем uint16_t -> float32_t, вычитаем offsetz
-    for (int i = 0; i < ADXL345DATA_DATALENGTH; i++) {
-        fft_input_buffer[2*i] =   ((float32_t)( buf1->zdata[i] - buf1->offsetz ))*buf1->scale;
-        fft_input_buffer[2*i+1] = ((float32_t)( buf2->zdata[i] - buf2->offsetz ))*buf2->scale;
+    for (int i = 0; i < length; i++) {
+        fft_input_buffer[i] = ((float32_t)(b1->zdata[i] - b1->offsetz ))*b1->scale;
     }
-
- //   for (int i = 0; i < ADXL345DATA_DATALENGTH; i++) {
- //       fft_input_buffer[2*i] =   0;
- //       fft_input_buffer[2*i+1] = 0;
- //   }
-
 
     // Инициализация RFFT (для вещественного входа)
     status = arm_rfft_fast_init_f32(&fft_instance, fft_size);
@@ -222,15 +235,99 @@ void ADXL345_2buf_FFT(adxl345_ic_t *buf1,adxl345_ic_t *buf2)  {
     // Вычисление магнитуд
     // Для RFFT результат — комплексный вектор длины fft_size, но симметричный
     // Нам нужны только первые (length/2 + 1) точек (от 0 до Nyquist)
+    arm_cmplx_mag_f32(fft_output_buffer,adxl345_ic->fft_result, fft_size / 2 + 1);
+
+    // Опционально: нормализация (деление на длину)
+    arm_scale_f32(adxl345_ic->fft_result, 1.0f / fft_size, adxl345_ic->fft_result, fft_size / 2 + 1);
+
+ //   for (int i = 0; i < (ADXL345DATA_DATALENGTH / 2 + 1); i++) {
+ //     adxl345_ic->fft_freqs[i] = ((float)(adxl345_ic->fft_samples/2.0) * (float)i) / (float) (ADXL345DATA_DATALENGTH / 2 + 1);
+ //   };
+
+
+
+
+    float max_val = b1->fft_result[1];
+    for (int i = 1; i <  fft_size / 2 + 1  ; i++) {
+      if (b1->fft_result[i]  > max_val) {
+    	  max_val = b1->fft_result[i];
+    	  b1->main_freq =  ((b1->fft_samples/2) * i/(fft_size / 2 + 1)) ;
+      }
+
+    }
+
+
+}
+
+
+
+
+*/
+
+
+
+
+
+
+
+
+
+void ADXL345_2buf_FFT(adxl345_ic_t *buf1,adxl345_ic_t *buf2)  {
+//void OPM_compute_fft_magnitude(uint16_t* input_buffer, uint32_t length, float32_t* magnitude_buffer) {
+    // Проверка: длина должна быть степенью двойки
+
+	uint32_t length = ADXL345DATA_DATALENGTH;
+
+    if ((length & (length - 1)) != 0) {
+        // Ошибка: длина не степень двойки
+        return;
+    }
+
+    // Максимальный размер FFT в CMSIS-DSP зависит от библиотеки
+    // Поддерживаемые размеры: 16, 32, 64, ..., 2048, 4096
+    uint32_t fft_size = length;
+
+    // Указатели на буферы
+    static float32_t fft_input_buffer[ADXL345DATA_DATALENGTH];
+    float32_t fft_output_buffer[ADXL345DATA_DATALENGTH];// Реальный и мнимый — чередуются
+
+    // Инициализация FFT
+    arm_rfft_fast_instance_f32 fft_instance;
+    arm_status status;
+
+    // Преобразуем uint16_t -> float32_t, вычитаем offsetz
+    for (int i = 0; i < ADXL345DATA_DATALENGTH; i++) {
+        fft_input_buffer[i] =   ((float32_t)( buf1->zdata[i] - buf1->offsetz ))*buf1->scale;
+       // fft_input_buffer[2*i+1] = ((float32_t)( buf2->zdata[i] - buf2->offsetz ))*buf2->scale;
+    }
+
+ //   for (int i = 0; i < ADXL345DATA_DATALENGTH; i++) {
+ //       fft_input_buffer[2*i] =   0;
+ //       fft_input_buffer[2*i+1] = 0;
+ //   }
+
+
+    // Инициализация RFFT (для вещественного входа)
+    status = arm_rfft_fast_init_f32(&fft_instance, fft_size / 2 + 1);
+    if (status != ARM_MATH_SUCCESS) {
+        return; // Ошибка инициализации
+    }
+
+    // Выполнение прямого FFT
+    arm_rfft_fast_f32(&fft_instance, fft_input_buffer, fft_output_buffer, 0); // 0 = прямое преобразование
+
+    // Вычисление магнитуд
+    // Для RFFT результат — комплексный вектор длины fft_size, но симметричный
+    // Нам нужны только первые (length/2 + 1) точек (от 0 до Nyquist)
     arm_cmplx_mag_f32(fft_output_buffer,fft_2buf_result, fft_size / 2 + 1);
 
 
-    for (int i = 0; i <  ADXL345DATA_DATALENGTH ; i++) {
-      fft_2buf_freq[i] = ((float)(buf1->fft_samples) * (float)i) / (float) (ADXL345DATA_DATALENGTH );
+    for (int i = 0; i <  fft_size / 2 + 1 ; i++) {
+      fft_2buf_freq[i] = ((float)(buf1->fft_samples/2) * (float)i) / (float) (ADXL345DATA_DATALENGTH );
     };
 
     float max_val = fft_2buf_result[1];
-    for (int i = 1; i <  ADXL345DATA_DATALENGTH ; i++) {
+    for (int i = 1; i <  fft_size / 2 + 1  ; i++) {
       if (fft_2buf_result[i]  > max_val) {
     	  max_val = fft_2buf_result[i];
     	  main_2buf_freq = fft_2buf_freq[i];
@@ -240,4 +337,55 @@ void ADXL345_2buf_FFT(adxl345_ic_t *buf1,adxl345_ic_t *buf2)  {
 
 
 
+}
+
+
+
+
+float32_t ADXL345_FFT_qwen(int16_t* input_buffer, uint32_t length, float32_t sample_rate_hz) {
+    // Проверка: длина — степень двойки и в допустимом диапазоне
+    if (length < 16 || length > 4096 || (length & (length - 1)) != 0) {
+        return 0.0f; // ошибка
+    }
+
+    // Статические буферы (размер под макс. возможный FFT)
+    static float32_t fft_input[4096];
+    static float32_t fft_output[4096];
+    static float32_t magnitude[2049]; // длина = 4096/2 + 1
+
+    // Преобразуем вход: вычитаем смещение, применяем масштаб
+    for (uint32_t i = 0; i < length; i++) {
+        fft_input[i] = (float32_t)(input_buffer[i] );
+    }
+
+    // Инициализация FFT
+    arm_rfft_fast_instance_f32 fft_inst;
+    if (arm_rfft_fast_init_f32(&fft_inst, length) != ARM_MATH_SUCCESS) {
+        return 0.0f;
+    }
+
+    // Прямое FFT
+    arm_rfft_fast_f32(&fft_inst, fft_input, fft_output, 0);
+
+    // Магнитуда (только первые length/2 + 1 точек)
+    uint32_t mag_len = length / 2 + 1;
+    arm_cmplx_mag_f32(fft_output, magnitude, mag_len);
+
+    // Нормализация (опционально, но помогает при сравнении)
+    arm_scale_f32(magnitude, 1.0f / (float32_t)length, magnitude, mag_len);
+
+    // Поиск максимума (игнорируем DC-компонент на индексе 0)
+    uint32_t max_idx = 1;
+    float32_t max_val = magnitude[1];
+
+    for (uint32_t i = 2; i < mag_len; i++) {
+        if (magnitude[i] > max_val) {
+            max_val = magnitude[i];
+            max_idx = i;
+        }
+    }
+
+    // Расчёт доминирующей частоты
+    float32_t dominant_freq = (float32_t)max_idx * sample_rate_hz / (float32_t)length;
+    return dominant_freq;
 }

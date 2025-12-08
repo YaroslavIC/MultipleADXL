@@ -138,6 +138,7 @@ typedef struct {
 
 
 	float fft_samples;
+	float main_freq;
 
 	uint16_t dataindex;
 
@@ -167,5 +168,7 @@ void ADXL345_SPI_WriteByte(adxl345_ic_t *adxl345_ic,uint8_t reg_addr, uint8_t da
 uint8_t ADXL345_ReadID(adxl345_ic_t *adxl345_ic);
 void ADXL345_FFT(adxl345_ic_t *adxl345_ic);
 void ADXL345_2buf_FFT(adxl345_ic_t *buf1,adxl345_ic_t *buf2);
+void ADXL345_FFT2buf(adxl345_ic_t *b1,adxl345_ic_t *b2);
+float32_t ADXL345_FFT_qwen(int16_t* input_buffer, uint32_t length, float32_t sample_rate_hz);
 
 #endif /* __ADXL345_SPI_H */

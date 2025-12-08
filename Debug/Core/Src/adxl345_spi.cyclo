@@ -5,5 +5,6 @@
 ../Core/Src/adxl345_spi.c:85:6:ADXL345_SPI_ReadMulti	4
 ../Core/Src/adxl345_spi.c:106:6:ADXL345_ReadXYZ	1
 ../Core/Src/adxl345_spi.c:117:9:ADXL345_ReadID	1
-../Core/Src/adxl345_spi.c:126:6:ADXL345_FFT	4
-../Core/Src/adxl345_spi.c:178:6:ADXL345_2buf_FFT	7
+../Core/Src/adxl345_spi.c:126:6:ADXL345_FFT	6
+../Core/Src/adxl345_spi.c:275:6:ADXL345_2buf_FFT	7
+../Core/Src/adxl345_spi.c:345:11:ADXL345_FFT_qwen	8
