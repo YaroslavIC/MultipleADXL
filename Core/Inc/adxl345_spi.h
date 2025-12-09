@@ -7,7 +7,7 @@
 #include "main.h"
 #include "arm_math.h"
 
-#define ADXL345DATA_DATALENGTH   1024
+#define ADXL345DATA_DATALENGTH   512
 
 
 // Адреса регистров ADXL345

@@ -23,6 +23,7 @@
 /* USER CODE BEGIN Includes */
 #include "adxl345_spi.h"
 #include "stm32f401xc.h"
+#include "arm_math.h"
 
 /* USER CODE END Includes */
 
@@ -42,6 +43,9 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
+I2S_HandleTypeDef hi2s3;
+DMA_HandleTypeDef hdma_spi3_rx;
+
 SPI_HandleTypeDef hspi1;
 SPI_HandleTypeDef hspi2;
 
@@ -49,22 +53,30 @@ TIM_HandleTypeDef htim3;
 
 /* USER CODE BEGIN PV */
 
+
+int16_t i2s_buf[1024];
+int16_t buf2[512];
+float32_t fft_result[512];
+float main_freq;
+
 adxl345_ic_t adxl345spi1;
 adxl345_ic_t adxl345spi2;
 uint32_t adxl345_selector;
 
-extern float32_t  fft_2buf_result[ADXL345DATA_DATALENGTH / 2 + 1];
+
 float domfreq ;
 int16_t b2zdata[2*ADXL345DATA_DATALENGTH];
-
+HAL_StatusTypeDef  rdma;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
+static void MX_DMA_Init(void);
 static void MX_SPI1_Init(void);
 static void MX_SPI2_Init(void);
 static void MX_TIM3_Init(void);
+static void MX_I2S3_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -82,6 +94,83 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
        adxl345_selector++;
     }
 }
+
+
+void HAL_I2S_RxCpltCallback(I2S_HandleTypeDef *hi2s){
+
+	for (int i = 0; i < 1000; i += 2) {
+	  buf2[i / 2]=i2s_buf[i];
+	};
+
+}
+
+
+
+float ICS43434_FFT(int16_t *in_buf,float fft_samples)  {
+//void OPM_compute_fft_magnitude(uint16_t* input_buffer, uint32_t length, float32_t* magnitude_buffer) {
+    // Проверка: длина должна быть степенью двойки
+
+	uint32_t length = 1024;
+
+    if ((length & (length - 1)) != 0) {
+        // Ошибка: длина не степень двойки
+        return 0;
+    }
+
+    // Максимальный размер FFT в CMSIS-DSP зависит от библиотеки
+    // Поддерживаемые размеры: 16, 32, 64, ..., 2048, 4096
+    uint32_t fft_size = length;
+
+    // Указатели на буферы
+    static float32_t fft_input_buffer[1024];
+    float32_t fft_output_buffer[1024];// Реальный и мнимый — чередуются
+
+    // Инициализация FFT
+    arm_rfft_fast_instance_f32 fft_instance;
+    arm_status status;
+
+    // Преобразуем uint16_t -> float32_t, вычитаем offsetz
+    for (int i = 0; i < length; i++) {
+        fft_input_buffer[i] = (float32_t)(in_buf[i]);
+    }
+
+    // Инициализация RFFT (для вещественного входа)
+    status = arm_rfft_fast_init_f32(&fft_instance, fft_size);
+    if (status != ARM_MATH_SUCCESS) {
+        return 0; // Ошибка инициализации
+    }
+
+    // Выполнение прямого FFT
+    arm_rfft_fast_f32(&fft_instance, fft_input_buffer, fft_output_buffer, 0); // 0 = прямое преобразование
+
+    // Вычисление магнитуд
+    // Для RFFT результат — комплексный вектор длины fft_size, но симметричный
+    // Нам нужны только первые (length/2 + 1) точек (от 0 до Nyquist)
+    arm_cmplx_mag_f32(fft_output_buffer,fft_result, fft_size / 2 + 1);
+
+    // Опционально: нормализация (деление на длину)
+    arm_scale_f32(fft_result, 1.0f / fft_size, fft_result, fft_size / 2 + 1);
+
+ //   };
+
+    float main_freq = 0;
+
+
+    float max_val = fft_result[1];
+    for (int i = 2; i <  fft_size / 2 + 1  ; i++) {
+      if (fft_result[i]  > max_val) {
+    	  max_val = fft_result[i];
+    	  main_freq =  ((fft_samples/2) * i/(fft_size / 2 + 1)) ;
+      }
+
+    }
+
+    return  main_freq;
+
+}
+
+
+
 
 
 /* USER CODE END 0 */
@@ -104,6 +193,8 @@ int main(void)
 
   /* USER CODE BEGIN Init */
 
+
+
   /* USER CODE END Init */
 
   /* Configure the system clock */
@@ -117,10 +208,13 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_DMA_Init();
   MX_SPI1_Init();
   MX_SPI2_Init();
   MX_TIM3_Init();
+  MX_I2S3_Init();
   /* USER CODE BEGIN 2 */
+
 
 
   adxl345spi1.dataindex = 0;
@@ -141,6 +235,10 @@ int main(void)
 
   HAL_TIM_Base_Start_IT(&htim3);
 
+
+
+   rdma = HAL_I2S_Receive_DMA(&hi2s3,  i2s_buf, 1024);
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -148,7 +246,10 @@ int main(void)
   while (1)
   {
 
+
 	  HAL_Delay(1000);
+
+	  main_freq = ICS43434_FFT(buf2,22000);
 
 	  ADXL345_FFT(&adxl345spi1);
 	  ADXL345_FFT(&adxl345spi2);
@@ -189,15 +290,14 @@ void SystemClock_Config(void)
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
-  RCC_OscInitStruct.HSIState = RCC_HSI_ON;
-  RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
+  RCC_OscInitStruct.HSEState = RCC_HSE_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
-  RCC_OscInitStruct.PLL.PLLM = 16;
-  RCC_OscInitStruct.PLL.PLLN = 168;
-  RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
-  RCC_OscInitStruct.PLL.PLLQ = 4;
+  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
+  RCC_OscInitStruct.PLL.PLLM = 25;
+  RCC_OscInitStruct.PLL.PLLN = 336;
+  RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV4;
+  RCC_OscInitStruct.PLL.PLLQ = 7;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
     Error_Handler();
@@ -210,12 +310,46 @@ void SystemClock_Config(void)
   RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
   RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
-  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
+  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV2;
 
   if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK)
   {
     Error_Handler();
   }
+}
+
+/**
+  * @brief I2S3 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_I2S3_Init(void)
+{
+
+  /* USER CODE BEGIN I2S3_Init 0 */
+
+  /* USER CODE END I2S3_Init 0 */
+
+  /* USER CODE BEGIN I2S3_Init 1 */
+
+  /* USER CODE END I2S3_Init 1 */
+  hi2s3.Instance = SPI3;
+  hi2s3.Init.Mode = I2S_MODE_MASTER_RX;
+  hi2s3.Init.Standard = I2S_STANDARD_PHILIPS;
+  hi2s3.Init.DataFormat = I2S_DATAFORMAT_16B;
+  hi2s3.Init.MCLKOutput = I2S_MCLKOUTPUT_DISABLE;
+  hi2s3.Init.AudioFreq = I2S_AUDIOFREQ_16K;
+  hi2s3.Init.CPOL = I2S_CPOL_LOW;
+  hi2s3.Init.ClockSource = I2S_CLOCK_PLL;
+  hi2s3.Init.FullDuplexMode = I2S_FULLDUPLEXMODE_DISABLE;
+  if (HAL_I2S_Init(&hi2s3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN I2S3_Init 2 */
+
+  /* USER CODE END I2S3_Init 2 */
+
 }
 
 /**
@@ -340,6 +474,22 @@ static void MX_TIM3_Init(void)
 }
 
 /**
+  * Enable DMA controller clock
+  */
+static void MX_DMA_Init(void)
+{
+
+  /* DMA controller clock enable */
+  __HAL_RCC_DMA1_CLK_ENABLE();
+
+  /* DMA interrupt init */
+  /* DMA1_Stream0_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Stream0_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Stream0_IRQn);
+
+}
+
+/**
   * @brief GPIO Initialization Function
   * @param None
   * @retval None
@@ -353,6 +503,7 @@ static void MX_GPIO_Init(void)
 
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOC_CLK_ENABLE();
+  __HAL_RCC_GPIOH_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
