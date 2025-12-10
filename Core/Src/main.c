@@ -187,64 +187,7 @@ float ICS43434_FFT(int16_t *in_buf,float fft_samples)  {
 
 }
 
-/*
-void UART_Buffer_Transmit(UART_HandleTypeDef *bthuart, const uint8_t *pData, uint16_t Size, uint16_t subPacketSize, uint32_t Timeout)
-{
-<<<<<<< HEAD
 
-	uint16_t datalength =  Size;
-	uint8_t *tx_data = (uint8_t*)&datalength;
-
-	HAL_UART_Transmit(bthuart,  tx_data,	2, Timeout);
-    HAL_Delay(1);
-
-	uint16_t i=0;
-	while (i<Size) {
-	   if ((i+subPacketSize)<Size) {
-		   datalength = subPacketSize;
-	   } else {
-		   datalength =  Size - i;
-	   }
-
-		HAL_UART_Transmit(bthuart, (unsigned char*) (pData+i),	 datalength, Timeout);
-	   i = i + datalength;
-	   HAL_Delay(1);
-	}
-}
-*/
-=======
->>>>>>> ca64b43e2035e9516d082ed522964d018d11e97b
-
-	uint16_t datalength =  Size;
-	uint8_t *tx_data = (uint8_t*)&datalength;
-
-<<<<<<< HEAD
-void CDC_ReceiveCallBack(uint8_t *Buf, uint32_t *Len) {
-//	if (hUsbDeviceFS.dev_state == USBD_STATE_CONFIGURED)
-//	   {
-	CDCRXBuf_LEN = *Len;
-	memcpy(NewCDCRXBuf, Buf, CDCRXBuf_LEN);
-=======
-	HAL_UART_Transmit(bthuart,  tx_data,	2, Timeout);
-    HAL_Delay(1);
-
-	uint16_t i=0;
-	while (i<Size) {
-	   if ((i+subPacketSize)<Size) {
-		   datalength = subPacketSize;
-	   } else {
-		   datalength =  Size - i;
-	   }
-
-		HAL_UART_Transmit(bthuart, (unsigned char*) (pData+i),	 datalength, Timeout);
-	   i = i + datalength;
-	   HAL_Delay(1);
-	}
-}
-*/
->>>>>>> ca64b43e2035e9516d082ed522964d018d11e97b
-
-}
 
 /* USER CODE END 0 */
 
@@ -318,15 +261,7 @@ int main(void)
   {
 
 
-	  if ((BTUART.cmd[0] == 'A') && (BTUART.cmd[6] == 'Z')) {
-			BTUART.cmd[0] = 0;
-<<<<<<< HEAD
-			HUART_Buffer_Transmit(&huart5, (unsigned char*) &_OPM.ADCbuf[0],	 2*ADC_OPM_RAWBUFFER_SIZE, 512,1000);
-=======
-			HLK50_UART_Buffer_Transmit(&huart5, (unsigned char*) &_OPM.ADCbuf[0],	 2*ADC_OPM_RAWBUFFER_SIZE, 512,1000);
->>>>>>> ca64b43e2035e9516d082ed522964d018d11e97b
 
-		}
 
 	  main_freq = ICS43434_FFT(buf2,16000);
 
@@ -339,6 +274,8 @@ int main(void)
 	    }
 
 	   domfreq = ADXL345_FFT_qwen(b2zdata,2*ADXL345DATA_DATALENGTH, 6400);
+
+
 
 
     /* USER CODE END WHILE */
