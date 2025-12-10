@@ -30,11 +30,26 @@
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
 
+#define UART_BUFFER_SIZE 10
+
+struct BTstruct{
+	char receivecomplete;
+	uint8_t receiveBufferchar;
+	uint8_t receivebufferindex;
+	uint8_t receiveBuffer[UART_BUFFER_SIZE];
+	uint8_t cmd[UART_BUFFER_SIZE];
+	uint32_t timeout_us;
+	uint32_t priortime_us;
+	uint32_t timeout_count;
+
+} ;
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
+#define  ICS_BUFFER_RAW   1024
+#define  ICS_BUFFER 	  (ICS_BUFFER_RAW / 2)
+#define  ICS_BUFFER_FFT   (ICS_BUFFER / 2 + 1)
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -53,10 +68,13 @@ TIM_HandleTypeDef htim3;
 
 /* USER CODE BEGIN PV */
 
+struct BTstruct BTUART;
 
-int16_t i2s_buf[1024];
-int16_t buf2[512];
-float32_t fft_result[512];
+
+
+int16_t i2s_buf[ICS_BUFFER_RAW];
+int16_t buf2[ICS_BUFFER];
+float32_t fft_result[ICS_BUFFER_FFT];
 float main_freq;
 
 adxl345_ic_t adxl345spi1;
@@ -98,7 +116,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 
 void HAL_I2S_RxCpltCallback(I2S_HandleTypeDef *hi2s){
 
-	for (int i = 0; i < 1000; i += 2) {
+	for (int i = 0; i < ICS_BUFFER_RAW; i += 2) {
 	  buf2[i / 2]=i2s_buf[i];
 	};
 
@@ -110,32 +128,32 @@ float ICS43434_FFT(int16_t *in_buf,float fft_samples)  {
 //void OPM_compute_fft_magnitude(uint16_t* input_buffer, uint32_t length, float32_t* magnitude_buffer) {
     // Проверка: длина должна быть степенью двойки
 
-	uint32_t length = 1024;
+//	uint32_t length = ICS_BUFFER;
 
-    if ((length & (length - 1)) != 0) {
+//    if ((length & (length - 1)) != 0) {
         // Ошибка: длина не степень двойки
-        return 0;
-    }
+//        return 0;
+//    }
 
     // Максимальный размер FFT в CMSIS-DSP зависит от библиотеки
     // Поддерживаемые размеры: 16, 32, 64, ..., 2048, 4096
-    uint32_t fft_size = length;
+ //   uint32_t fft_size = length;
 
     // Указатели на буферы
-    static float32_t fft_input_buffer[1024];
-    float32_t fft_output_buffer[1024];// Реальный и мнимый — чередуются
+    static float32_t fft_input_buffer[ICS_BUFFER];
+    float32_t fft_output_buffer[ICS_BUFFER];// Реальный и мнимый — чередуются
 
     // Инициализация FFT
     arm_rfft_fast_instance_f32 fft_instance;
     arm_status status;
 
     // Преобразуем uint16_t -> float32_t, вычитаем offsetz
-    for (int i = 0; i < length; i++) {
+    for (int i = 0; i < ICS_BUFFER; i++) {
         fft_input_buffer[i] = (float32_t)(in_buf[i]);
     }
 
     // Инициализация RFFT (для вещественного входа)
-    status = arm_rfft_fast_init_f32(&fft_instance, fft_size);
+    status = arm_rfft_fast_init_f32(&fft_instance, ICS_BUFFER);
     if (status != ARM_MATH_SUCCESS) {
         return 0; // Ошибка инициализации
     }
@@ -146,10 +164,10 @@ float ICS43434_FFT(int16_t *in_buf,float fft_samples)  {
     // Вычисление магнитуд
     // Для RFFT результат — комплексный вектор длины fft_size, но симметричный
     // Нам нужны только первые (length/2 + 1) точек (от 0 до Nyquist)
-    arm_cmplx_mag_f32(fft_output_buffer,fft_result, fft_size / 2 + 1);
+    arm_cmplx_mag_f32(fft_output_buffer,fft_result, ICS_BUFFER_FFT);
 
     // Опционально: нормализация (деление на длину)
-    arm_scale_f32(fft_result, 1.0f / fft_size, fft_result, fft_size / 2 + 1);
+    arm_scale_f32(fft_result, 1.0f / ICS_BUFFER, fft_result, ICS_BUFFER_FFT);
 
  //   };
 
@@ -157,10 +175,10 @@ float ICS43434_FFT(int16_t *in_buf,float fft_samples)  {
 
 
     float max_val = fft_result[1];
-    for (int i = 2; i <  fft_size / 2 + 1  ; i++) {
+    for (int i = 2; i <  ICS_BUFFER_FFT  ; i++) {
       if (fft_result[i]  > max_val) {
     	  max_val = fft_result[i];
-    	  main_freq =  ((fft_samples/2) * i/(fft_size / 2 + 1)) ;
+    	  main_freq =  ((fft_samples/2) * i/(ICS_BUFFER_FFT)) ;
       }
 
     }
@@ -169,8 +187,30 @@ float ICS43434_FFT(int16_t *in_buf,float fft_samples)  {
 
 }
 
+/*
+void UART_Buffer_Transmit(UART_HandleTypeDef *bthuart, const uint8_t *pData, uint16_t Size, uint16_t subPacketSize, uint32_t Timeout)
+{
 
+	uint16_t datalength =  Size;
+	uint8_t *tx_data = (uint8_t*)&datalength;
 
+	HAL_UART_Transmit(bthuart,  tx_data,	2, Timeout);
+    HAL_Delay(1);
+
+	uint16_t i=0;
+	while (i<Size) {
+	   if ((i+subPacketSize)<Size) {
+		   datalength = subPacketSize;
+	   } else {
+		   datalength =  Size - i;
+	   }
+
+		HAL_UART_Transmit(bthuart, (unsigned char*) (pData+i),	 datalength, Timeout);
+	   i = i + datalength;
+	   HAL_Delay(1);
+	}
+}
+*/
 
 
 /* USER CODE END 0 */
@@ -235,9 +275,7 @@ int main(void)
 
   HAL_TIM_Base_Start_IT(&htim3);
 
-
-
-   rdma = HAL_I2S_Receive_DMA(&hi2s3,  i2s_buf, 1024);
+   rdma = HAL_I2S_Receive_DMA(&hi2s3,  i2s_buf, ICS_BUFFER_RAW);
 
   /* USER CODE END 2 */
 
@@ -247,24 +285,24 @@ int main(void)
   {
 
 
-	  HAL_Delay(1000);
+	  if ((BTUART.cmd[0] == 'A') && (BTUART.cmd[6] == 'Z')) {
+			BTUART.cmd[0] = 0;
+			HLK50_UART_Buffer_Transmit(&huart5, (unsigned char*) &_OPM.ADCbuf[0],	 2*ADC_OPM_RAWBUFFER_SIZE, 512,1000);
 
-	  main_freq = ICS43434_FFT(buf2,22000);
+		}
+
+	  main_freq = ICS43434_FFT(buf2,16000);
 
 	  ADXL345_FFT(&adxl345spi1);
 	  ADXL345_FFT(&adxl345spi2);
-
-	  //ADXL345_2buf_FFT(&adxl345spi1,&adxl345spi2);
-	//  ADXL345_FFT2buf() ;
 
 	    for (int i = 0; i < ADXL345DATA_DATALENGTH; i++) {
 	    	b2zdata[2*i]     =  ((float32_t)( adxl345spi1.zdata[i] - adxl345spi1.offsetz ))*adxl345spi1.scale;
 	    	b2zdata[2*i+1] =  ((float32_t)( adxl345spi2.zdata[i] - adxl345spi2.offsetz ))*adxl345spi2.scale;
 	    }
 
-	   domfreq = ADXL345_FFT_qwen(b2zdata,2048, 6400);
+	   domfreq = ADXL345_FFT_qwen(b2zdata,2*ADXL345DATA_DATALENGTH, 6400);
 
-	  HAL_Delay(1);
 
     /* USER CODE END WHILE */
 
