@@ -42,3 +42,4 @@
 *.idb
 *.pdb
 /Debug/**
+/MATLAB/*.mp4

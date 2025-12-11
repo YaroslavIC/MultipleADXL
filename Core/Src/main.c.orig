@@ -18,15 +18,12 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-#include "usb_device.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "adxl345_spi.h"
 #include "stm32f401xc.h"
 #include "arm_math.h"
-#include "usbd_cdc_if.h"
-#include "usb_device.h"
 
 /* USER CODE END Includes */
 
@@ -71,10 +68,6 @@ TIM_HandleTypeDef htim3;
 
 /* USER CODE BEGIN PV */
 
-uint8_t cmdbuf[4];
-uint8_t stop_flag;
-uint16_t i2s_buffercount = 0;
-
 struct BTstruct BTUART;
 
 
@@ -90,7 +83,7 @@ uint32_t adxl345_selector;
 
 
 float domfreq ;
-float b2zdata[2*ADXL345DATA_DATALENGTH];
+int16_t b2zdata[2*ADXL345DATA_DATALENGTH];
 HAL_StatusTypeDef  rdma;
 /* USER CODE END PV */
 
@@ -103,8 +96,7 @@ static void MX_SPI2_Init(void);
 static void MX_TIM3_Init(void);
 static void MX_I2S3_Init(void);
 /* USER CODE BEGIN PFP */
-extern uint8_t CDC_Transmit_FS(uint8_t* Buf, uint16_t Len);
-extern USBD_HandleTypeDef hUsbDeviceFS;
+
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -124,16 +116,28 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 
 void HAL_I2S_RxCpltCallback(I2S_HandleTypeDef *hi2s){
 
-//	for (int i = 0; i < ICS_BUFFER_RAW; i += 2) {
-//	  buf2[i / 2]=i2s_buf[i];
-//	};
-	i2s_buffercount++;
+	for (int i = 0; i < ICS_BUFFER_RAW; i += 2) {
+	  buf2[i / 2]=i2s_buf[i];
+	};
 
 }
 
 
 
 float ICS43434_FFT(int16_t *in_buf,float fft_samples)  {
+//void OPM_compute_fft_magnitude(uint16_t* input_buffer, uint32_t length, float32_t* magnitude_buffer) {
+    // Проверка: длина должна быть степенью двойки
+
+//	uint32_t length = ICS_BUFFER;
+
+//    if ((length & (length - 1)) != 0) {
+        // Ошибка: длина не степень двойки
+//        return 0;
+//    }
+
+    // Максимальный размер FFT в CMSIS-DSP зависит от библиотеки
+    // Поддерживаемые размеры: 16, 32, 64, ..., 2048, 4096
+ //   uint32_t fft_size = length;
 
     // Указатели на буферы
     static float32_t fft_input_buffer[ICS_BUFFER];
@@ -165,6 +169,7 @@ float ICS43434_FFT(int16_t *in_buf,float fft_samples)  {
     // Опционально: нормализация (деление на длину)
     arm_scale_f32(fft_result, 1.0f / ICS_BUFFER, fft_result, ICS_BUFFER_FFT);
 
+ //   };
 
     float main_freq = 0;
 
@@ -182,41 +187,64 @@ float ICS43434_FFT(int16_t *in_buf,float fft_samples)  {
 
 }
 
-void CDC_ReceiveCallBack(uint8_t *Buf, uint32_t *Len)
+/*
+void UART_Buffer_Transmit(UART_HandleTypeDef *bthuart, const uint8_t *pData, uint16_t Size, uint16_t subPacketSize, uint32_t Timeout)
 {
-	if(hUsbDeviceFS.dev_state == USBD_STATE_CONFIGURED) {
-		if ( (*Len>=4) && (Buf[3]==0x5A) ) {
-			memcpy(cmdbuf, Buf, 4);
-			Buf[3]=0;
-		}
-	}
-}
+<<<<<<< HEAD
 
-void Buffer_Transmit(const uint8_t *pData, uint16_t Size_in_Bytes, uint16_t subPacketSize)
-{
-
-	uint16_t datalength =  Size_in_Bytes;
+	uint16_t datalength =  Size;
 	uint8_t *tx_data = (uint8_t*)&datalength;
 
-	CDC_Transmit_FS((uint8_t*)tx_data,2);
-
-	//HAL_UART_Transmit(bthuart,  tx_data,	2, Timeout);
+	HAL_UART_Transmit(bthuart,  tx_data,	2, Timeout);
     HAL_Delay(1);
 
 	uint16_t i=0;
-	while (i<Size_in_Bytes) {
-	   if ((i+subPacketSize)<Size_in_Bytes) {
+	while (i<Size) {
+	   if ((i+subPacketSize)<Size) {
 		   datalength = subPacketSize;
 	   } else {
-		   datalength =  Size_in_Bytes - i;
+		   datalength =  Size - i;
 	   }
 
-	   CDC_Transmit_FS((uint8_t*) (pData+i),	 datalength );
+		HAL_UART_Transmit(bthuart, (unsigned char*) (pData+i),	 datalength, Timeout);
 	   i = i + datalength;
 	   HAL_Delay(1);
 	}
 }
+*/
+=======
+>>>>>>> ca64b43e2035e9516d082ed522964d018d11e97b
 
+	uint16_t datalength =  Size;
+	uint8_t *tx_data = (uint8_t*)&datalength;
+
+<<<<<<< HEAD
+void CDC_ReceiveCallBack(uint8_t *Buf, uint32_t *Len) {
+//	if (hUsbDeviceFS.dev_state == USBD_STATE_CONFIGURED)
+//	   {
+	CDCRXBuf_LEN = *Len;
+	memcpy(NewCDCRXBuf, Buf, CDCRXBuf_LEN);
+=======
+	HAL_UART_Transmit(bthuart,  tx_data,	2, Timeout);
+    HAL_Delay(1);
+
+	uint16_t i=0;
+	while (i<Size) {
+	   if ((i+subPacketSize)<Size) {
+		   datalength = subPacketSize;
+	   } else {
+		   datalength =  Size - i;
+	   }
+
+		HAL_UART_Transmit(bthuart, (unsigned char*) (pData+i),	 datalength, Timeout);
+	   i = i + datalength;
+	   HAL_Delay(1);
+	}
+}
+*/
+>>>>>>> ca64b43e2035e9516d082ed522964d018d11e97b
+
+}
 
 /* USER CODE END 0 */
 
@@ -258,7 +286,6 @@ int main(void)
   MX_SPI2_Init();
   MX_TIM3_Init();
   MX_I2S3_Init();
-  MX_USB_DEVICE_Init();
   /* USER CODE BEGIN 2 */
 
 
@@ -279,11 +306,9 @@ int main(void)
   ADXL345_Init_Calib(&adxl345spi1);
   ADXL345_Init_Calib(&adxl345spi2);
 
-  stop_flag=0;
-
   HAL_TIM_Base_Start_IT(&htim3);
-  rdma = HAL_I2S_Receive_DMA(&hi2s3, (uint16_t *) i2s_buf, ICS_BUFFER_RAW);
-  rdma = HAL_I2S_DMAPause(&hi2s3);
+
+   rdma = HAL_I2S_Receive_DMA(&hi2s3,  i2s_buf, ICS_BUFFER_RAW);
 
   /* USER CODE END 2 */
 
@@ -292,74 +317,28 @@ int main(void)
   while (1)
   {
 
-	  if (stop_flag==1) {
-		  HAL_TIM_Base_Stop_IT(&htim3);
-		  rdma = HAL_I2S_DMAPause(&hi2s3);
 
-	  }
+	  if ((BTUART.cmd[0] == 'A') && (BTUART.cmd[6] == 'Z')) {
+			BTUART.cmd[0] = 0;
+<<<<<<< HEAD
+			HUART_Buffer_Transmit(&huart5, (unsigned char*) &_OPM.ADCbuf[0],	 2*ADC_OPM_RAWBUFFER_SIZE, 512,1000);
+=======
+			HLK50_UART_Buffer_Transmit(&huart5, (unsigned char*) &_OPM.ADCbuf[0],	 2*ADC_OPM_RAWBUFFER_SIZE, 512,1000);
+>>>>>>> ca64b43e2035e9516d082ed522964d018d11e97b
 
-	  if (stop_flag==0) {
-		  HAL_TIM_Base_Start_IT(&htim3);
-		  HAL_I2S_DMAResume(&hi2s3);
-		  stop_flag=2;
-	  };
+		}
 
-    	for (int i = 0; i < ICS_BUFFER_RAW; i += 2) {  buf2[i / 2]=i2s_buf[i]+1; };
-	  main_freq = ICS43434_FFT(buf2,hi2s3.Init.AudioFreq);
+	  main_freq = ICS43434_FFT(buf2,16000);
 
 	  ADXL345_FFT(&adxl345spi1);
 	  ADXL345_FFT(&adxl345spi2);
 
 	    for (int i = 0; i < ADXL345DATA_DATALENGTH; i++) {
-	    	b2zdata[2*i]     =  ((float)( adxl345spi1.zdata[i] - adxl345spi1.offsetz ))*adxl345spi1.scale;
-	    	b2zdata[2*i+1] =  ((float)( adxl345spi2.zdata[i] - adxl345spi2.offsetz ))*adxl345spi2.scale;
+	    	b2zdata[2*i]     =  ((float32_t)( adxl345spi1.zdata[i] - adxl345spi1.offsetz ))*adxl345spi1.scale;
+	    	b2zdata[2*i+1] =  ((float32_t)( adxl345spi2.zdata[i] - adxl345spi2.offsetz ))*adxl345spi2.scale;
 	    }
 
 	   domfreq = ADXL345_FFT_qwen(b2zdata,2*ADXL345DATA_DATALENGTH, 6400);
-
-
-		  if((cmdbuf[0] == 'A') && (cmdbuf[3] == 'Z'))
-		  {
-			  cmdbuf[0] = 0;
-			  Buffer_Transmit((uint8_t *)i2s_buf,2*ICS_BUFFER_RAW,500);
-		  };
-
-		  if((cmdbuf[0] == 'B') && (cmdbuf[3] == 'Z'))
-		  {
-			  cmdbuf[0] = 0;
-			  Buffer_Transmit((uint8_t *)buf2,2*ICS_BUFFER,500);
-		  };
-
-
-		  if((cmdbuf[0] == 'C') && (cmdbuf[3] == 'Z'))
-		  {
-			  cmdbuf[0] = 0;
-			  Buffer_Transmit((uint8_t *)fft_result,4*ICS_BUFFER_FFT,500);
-		  };
-
-		  if((cmdbuf[0] == 'D') && (cmdbuf[3] == 'Z'))
-		  {
-			  cmdbuf[0] = 0;
-			  Buffer_Transmit((uint8_t *)b2zdata,2*2*ADXL345DATA_DATALENGTH,500);
-		  };
-
-		  if((cmdbuf[0] == 'E') && (cmdbuf[3] == 'Z'))
-		  {
-			  cmdbuf[0] = 0;
-			stop_flag = 1;
-		  };
-
-		  if((cmdbuf[0] == 'F') && (cmdbuf[3] == 'Z'))
-		  {
-			  cmdbuf[0] = 0;
-			stop_flag = 0;
-		  };
-
-		  if((cmdbuf[0] == 'G') && (cmdbuf[3] == 'Z'))
-		  {
-			  cmdbuf[0] = 0;
-			  Buffer_Transmit((uint8_t *)adxl345spi1.zdata,2*ADXL345DATA_DATALENGTH,500);
-		  };
 
 
     /* USER CODE END WHILE */
@@ -434,7 +413,7 @@ static void MX_I2S3_Init(void)
   hi2s3.Init.Standard = I2S_STANDARD_PHILIPS;
   hi2s3.Init.DataFormat = I2S_DATAFORMAT_16B;
   hi2s3.Init.MCLKOutput = I2S_MCLKOUTPUT_DISABLE;
-  hi2s3.Init.AudioFreq = I2S_AUDIOFREQ_48K;
+  hi2s3.Init.AudioFreq = I2S_AUDIOFREQ_16K;
   hi2s3.Init.CPOL = I2S_CPOL_LOW;
   hi2s3.Init.ClockSource = I2S_CLOCK_PLL;
   hi2s3.Init.FullDuplexMode = I2S_FULLDUPLEXMODE_DISABLE;

@@ -342,7 +342,7 @@ void ADXL345_2buf_FFT(adxl345_ic_t *buf1,adxl345_ic_t *buf2)  {
 
 
 
-float32_t ADXL345_FFT_qwen(int16_t* input_buffer, uint32_t length, float32_t sample_rate_hz) {
+float32_t ADXL345_FFT_qwen(float* input_buffer, uint32_t length, float32_t sample_rate_hz) {
     // Проверка: длина — степень двойки и в допустимом диапазоне
     if (length < 16 || length > 2*ADXL345DATA_DATALENGTH || (length & (length - 1)) != 0) {
         return 0.0f; // ошибка

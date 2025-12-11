@@ -37,7 +37,7 @@
 
 /* USER CODE BEGIN PFP */
 /* Private function prototypes -----------------------------------------------*/
-USBD_HandleTypeDef hUsbDeviceFS;
+
 /* USER CODE END PFP */
 
 /* USB Device Core handle declaration. */
