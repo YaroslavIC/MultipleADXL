@@ -18,6 +18,7 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "usb_device.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -68,6 +69,8 @@ TIM_HandleTypeDef htim3;
 
 /* USER CODE BEGIN PV */
 
+uint8_t cmdbuf[4];
+
 struct BTstruct BTUART;
 
 
@@ -96,7 +99,8 @@ static void MX_SPI2_Init(void);
 static void MX_TIM3_Init(void);
 static void MX_I2S3_Init(void);
 /* USER CODE BEGIN PFP */
-
+extern uint8_t CDC_Transmit_FS(uint8_t* Buf, uint16_t Len);
+extern USBD_HandleTypeDef hUsbDeviceFS;
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -125,19 +129,6 @@ void HAL_I2S_RxCpltCallback(I2S_HandleTypeDef *hi2s){
 
 
 float ICS43434_FFT(int16_t *in_buf,float fft_samples)  {
-//void OPM_compute_fft_magnitude(uint16_t* input_buffer, uint32_t length, float32_t* magnitude_buffer) {
-    // Проверка: длина должна быть степенью двойки
-
-//	uint32_t length = ICS_BUFFER;
-
-//    if ((length & (length - 1)) != 0) {
-        // Ошибка: длина не степень двойки
-//        return 0;
-//    }
-
-    // Максимальный размер FFT в CMSIS-DSP зависит от библиотеки
-    // Поддерживаемые размеры: 16, 32, 64, ..., 2048, 4096
- //   uint32_t fft_size = length;
 
     // Указатели на буферы
     static float32_t fft_input_buffer[ICS_BUFFER];
@@ -169,7 +160,6 @@ float ICS43434_FFT(int16_t *in_buf,float fft_samples)  {
     // Опционально: нормализация (деление на длину)
     arm_scale_f32(fft_result, 1.0f / ICS_BUFFER, fft_result, ICS_BUFFER_FFT);
 
- //   };
 
     float main_freq = 0;
 
@@ -187,6 +177,40 @@ float ICS43434_FFT(int16_t *in_buf,float fft_samples)  {
 
 }
 
+void CDC_ReceiveCallBack(uint8_t *Buf, uint32_t *Len)
+{
+	if(hUsbDeviceFS.dev_state == USBD_STATE_CONFIGURED) {
+		if ( (*Len>=4) && (Buf[3]==0x5A) ) {
+			memcpy(cmdbuf, Buf, 4);
+			Buf[3]=0;
+		}
+	}
+}
+
+void Buffer_Transmit(const uint8_t *pData, uint16_t Size, uint16_t subPacketSize)
+{
+
+	uint16_t datalength =  Size;
+	uint8_t *tx_data = (uint8_t*)&datalength;
+
+	CDC_Transmit_FS((uint8_t*)tx_data,2);
+
+	//HAL_UART_Transmit(bthuart,  tx_data,	2, Timeout);
+    HAL_Delay(1);
+
+	uint16_t i=0;
+	while (i<Size) {
+	   if ((i+subPacketSize)<Size) {
+		   datalength = subPacketSize;
+	   } else {
+		   datalength =  Size - i;
+	   }
+
+	   CDC_Transmit_FS((uint8_t*) (pData+i),	 datalength );
+	   i = i + datalength;
+	   HAL_Delay(1);
+	}
+}
 
 
 /* USER CODE END 0 */
@@ -229,6 +253,7 @@ int main(void)
   MX_SPI2_Init();
   MX_TIM3_Init();
   MX_I2S3_Init();
+  MX_USB_DEVICE_Init();
   /* USER CODE BEGIN 2 */
 
 
@@ -251,7 +276,7 @@ int main(void)
 
   HAL_TIM_Base_Start_IT(&htim3);
 
-   rdma = HAL_I2S_Receive_DMA(&hi2s3,  i2s_buf, ICS_BUFFER_RAW);
+  rdma = HAL_I2S_Receive_DMA(&hi2s3,  i2s_buf, ICS_BUFFER_RAW);
 
   /* USER CODE END 2 */
 
@@ -275,6 +300,31 @@ int main(void)
 
 	   domfreq = ADXL345_FFT_qwen(b2zdata,2*ADXL345DATA_DATALENGTH, 6400);
 
+
+		  if((cmdbuf[0] == 'A') && (cmdbuf[3] == 'Z'))
+		  {
+			  cmdbuf[0] = 0;
+			  Buffer_Transmit((uint8_t *)i2s_buf,2*ICS_BUFFER_RAW,500);
+		  };
+
+		  if((cmdbuf[0] == 'B') && (cmdbuf[3] == 'Z'))
+		  {
+			  cmdbuf[0] = 0;
+			  Buffer_Transmit((uint8_t *)buf2,2*ICS_BUFFER,500);
+		  };
+
+
+		  if((cmdbuf[0] == 'C') && (cmdbuf[3] == 'Z'))
+		  {
+			  cmdbuf[0] = 0;
+			  Buffer_Transmit((uint8_t *)fft_result,4*ICS_BUFFER_FFT,500);
+		  };
+
+		  if((cmdbuf[0] == 'D') && (cmdbuf[3] == 'Z'))
+		  {
+			  cmdbuf[0] = 0;
+			  Buffer_Transmit((uint8_t *)b2zdata,2*2*ADXL345DATA_DATALENGTH,500);
+		  };
 
 
 
