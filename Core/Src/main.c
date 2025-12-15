@@ -50,7 +50,7 @@ struct BTstruct{
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define  ICS_BUFFER_RAW   1024
+#define  ICS_BUFFER_RAW   (1024*2)
 #define  ICS_BUFFER 	  (ICS_BUFFER_RAW / 2)
 #define  ICS_BUFFER_FFT   (ICS_BUFFER / 2 + 1)
 /* USER CODE END PD */
@@ -81,15 +81,15 @@ struct BTstruct BTUART;
 
 int16_t i2s_buf[ICS_BUFFER_RAW];
 int16_t buf2[ICS_BUFFER];
-float32_t fft_result[ICS_BUFFER_FFT];
-float main_freq;
+static float32_t fft_result[ICS_BUFFER_FFT];
+float ics_freq;
 
 adxl345_ic_t adxl345spi1;
 adxl345_ic_t adxl345spi2;
 uint32_t adxl345_selector;
 
 
-float domfreq ;
+float adxl_freq ;
 float b2zdata[2*ADXL345DATA_DATALENGTH];
 HAL_StatusTypeDef  rdma;
 /* USER CODE END PV */
@@ -133,7 +133,7 @@ void HAL_I2S_RxCpltCallback(I2S_HandleTypeDef *hi2s){
 
 
 
-float ICS43434_FFT(int16_t *in_buf,float fft_samples)  {
+float ICS43434_FFT(int16_t *in_buf,float fs)  {
 
     // Указатели на буферы
     static float32_t fft_input_buffer[ICS_BUFFER];
@@ -143,9 +143,12 @@ float ICS43434_FFT(int16_t *in_buf,float fft_samples)  {
     arm_rfft_fast_instance_f32 fft_instance;
     arm_status status;
 
+
+
     // Преобразуем uint16_t -> float32_t, вычитаем offsetz
     for (int i = 0; i < ICS_BUFFER; i++) {
         fft_input_buffer[i] = (float32_t)(in_buf[i]);
+   // 	fft_input_buffer[i] = (float32_t)(sin(20.0*(float)i/(float)(ICS_BUFFER)*2.0*3.14159));
     }
 
     // Инициализация RFFT (для вещественного входа)
@@ -165,21 +168,19 @@ float ICS43434_FFT(int16_t *in_buf,float fft_samples)  {
     // Опционально: нормализация (деление на длину)
     arm_scale_f32(fft_result, 1.0f / ICS_BUFFER, fft_result, ICS_BUFFER_FFT);
 
-
-    float main_freq = 0;
-
+    float loc_main_freq = 0;
 
     float max_val = fft_result[1];
     for (int i = 2; i <  ICS_BUFFER_FFT  ; i++) {
       if (fft_result[i]  > max_val) {
-    	  max_val = fft_result[i];
-    	  main_freq =  ((fft_samples/2) * i/(ICS_BUFFER_FFT)) ;
+    	max_val = fft_result[i];
+    	loc_main_freq = i;
       }
-
     }
 
-    return  main_freq;
+    loc_main_freq = (fs/2.0) * ((float)loc_main_freq / (float)ICS_BUFFER_FFT);
 
+    return  loc_main_freq;
 }
 
 void CDC_ReceiveCallBack(uint8_t *Buf, uint32_t *Len)
@@ -283,7 +284,7 @@ int main(void)
 
   HAL_TIM_Base_Start_IT(&htim3);
   rdma = HAL_I2S_Receive_DMA(&hi2s3, (uint16_t *) i2s_buf, ICS_BUFFER_RAW);
-  rdma = HAL_I2S_DMAPause(&hi2s3);
+  //rdma = HAL_I2S_DMAPause(&hi2s3);
 
   /* USER CODE END 2 */
 
@@ -293,19 +294,19 @@ int main(void)
   {
 
 	  if (stop_flag==1) {
-		  HAL_TIM_Base_Stop_IT(&htim3);
-		  rdma = HAL_I2S_DMAPause(&hi2s3);
+		//  HAL_TIM_Base_Stop_IT(&htim3);
+		//  rdma = HAL_I2S_DMAPause(&hi2s3);
 
 	  }
 
 	  if (stop_flag==0) {
-		  HAL_TIM_Base_Start_IT(&htim3);
-		  HAL_I2S_DMAResume(&hi2s3);
-		  stop_flag=2;
+		//  HAL_TIM_Base_Start_IT(&htim3);
+		//  HAL_I2S_DMAResume(&hi2s3);
+		//  stop_flag=2;
 	  };
 
     	for (int i = 0; i < ICS_BUFFER_RAW; i += 2) {  buf2[i / 2]=i2s_buf[i]+1; };
-	  main_freq = ICS43434_FFT(buf2,hi2s3.Init.AudioFreq);
+	  ics_freq = ICS43434_FFT(buf2,48000);
 
 	  ADXL345_FFT(&adxl345spi1);
 	  ADXL345_FFT(&adxl345spi2);
@@ -315,7 +316,7 @@ int main(void)
 	    	b2zdata[2*i+1] =  ((float)( adxl345spi2.zdata[i] - adxl345spi2.offsetz ))*adxl345spi2.scale;
 	    }
 
-	   domfreq = ADXL345_FFT_qwen(b2zdata,2*ADXL345DATA_DATALENGTH, 6400);
+	   adxl_freq = ADXL345_FFT_qwen(b2zdata,2*ADXL345DATA_DATALENGTH, 6400);
 
 
 		  if((cmdbuf[0] == 'A') && (cmdbuf[3] == 'Z'))
