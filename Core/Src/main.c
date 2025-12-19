@@ -50,7 +50,7 @@ struct BTstruct{
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define  ICS_BUFFER_RAW   (1024*2)
+#define  ICS_BUFFER_RAW   (1024)
 #define  ICS_BUFFER 	  (ICS_BUFFER_RAW / 2)
 #define  ICS_BUFFER_FFT   (ICS_BUFFER / 2 + 1)
 /* USER CODE END PD */
@@ -80,12 +80,13 @@ struct BTstruct BTUART;
 
 
 int16_t i2s_buf[ICS_BUFFER_RAW];
-int16_t buf2[ICS_BUFFER];
+//int16_t buf2[ICS_BUFFER];
 static float32_t fft_result[ICS_BUFFER_FFT];
+
 float ics_freq;
 
-adxl345_ic_t adxl345spi1;
-adxl345_ic_t adxl345spi2;
+//adxl345_ic_t adxl345spi1;
+//adxl345_ic_t adxl345spi2;
 uint32_t adxl345_selector;
 
 
@@ -114,8 +115,8 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
     if (htim->Instance == TIM3)
     {
-       if (adxl345_selector%2==0) {ADXL345_ReadXYZ(&adxl345spi1);};
-       if (adxl345_selector%2==1) {ADXL345_ReadXYZ(&adxl345spi2);};
+    //   if (adxl345_selector%2==0) {ADXL345_ReadXYZ(&adxl345spi1);};
+    //   if (adxl345_selector%2==1) {ADXL345_ReadXYZ(&adxl345spi2);};
 
        adxl345_selector++;
     }
@@ -131,9 +132,7 @@ void HAL_I2S_RxCpltCallback(I2S_HandleTypeDef *hi2s){
 
 }
 
-
-
-float ICS43434_FFT(int16_t *in_buf,float fs)  {
+float ICS43434_FFT2(int16_t *in_buf,float fs)  {
 
     // Указатели на буферы
     static float32_t fft_input_buffer[ICS_BUFFER];
@@ -150,6 +149,60 @@ float ICS43434_FFT(int16_t *in_buf,float fs)  {
         fft_input_buffer[i] = (float32_t)(in_buf[i]);
    // 	fft_input_buffer[i] = (float32_t)(sin(20.0*(float)i/(float)(ICS_BUFFER)*2.0*3.14159));
     }
+
+    // Инициализация RFFT (для вещественного входа)
+    status = arm_rfft_fast_init_f32(&fft_instance, ICS_BUFFER);
+    if (status != ARM_MATH_SUCCESS) {
+        return 0; // Ошибка инициализации
+    }
+
+    // Выполнение прямого FFT
+    arm_rfft_fast_f32(&fft_instance, fft_input_buffer, fft_output_buffer, 0); // 0 = прямое преобразование
+
+    // Вычисление магнитуд
+    // Для RFFT результат — комплексный вектор длины fft_size, но симметричный
+    // Нам нужны только первые (length/2 + 1) точек (от 0 до Nyquist)
+    arm_cmplx_mag_f32(fft_output_buffer,fft_result, ICS_BUFFER_FFT);
+
+    // Опционально: нормализация (деление на длину)
+    arm_scale_f32(fft_result, 1.0f / ICS_BUFFER, fft_result, ICS_BUFFER_FFT);
+
+    float loc_main_freq = 0;
+
+    float max_val = fft_result[1];
+    for (int i = 2; i <  ICS_BUFFER_FFT  ; i++) {
+      if (fft_result[i]  > max_val) {
+    	max_val = fft_result[i];
+    	loc_main_freq = i;
+      }
+    }
+
+    loc_main_freq = (fs/2.0) * ((float)loc_main_freq / (float)ICS_BUFFER_FFT);
+
+    return  loc_main_freq;
+}
+
+float ICS43434_FFT()  {
+
+    // Указатели на буферы
+    static float32_t fft_input_buffer[ICS_BUFFER];
+    float32_t fft_output_buffer[ICS_BUFFER];// Реальный и мнимый — чередуются
+
+    float fs = (float)hi2s3.Init.AudioFreq;
+
+    // Инициализация FFT
+    arm_rfft_fast_instance_f32 fft_instance;
+    arm_status status;
+
+    for (int i = 0; i < ICS_BUFFER_RAW; i += 2) {
+    	fft_input_buffer[i / 2]=i2s_buf[i]+1;
+    };
+
+    // Преобразуем uint16_t -> float32_t, вычитаем offsetz
+   // for (int i = 0; i < ICS_BUFFER; i++) {
+      //  fft_input_buffer[i] = (float32_t)(in_buf[i]);
+   // 	fft_input_buffer[i] = (float32_t)(sin(20.0*(float)i/(float)(ICS_BUFFER)*2.0*3.14159));
+    //}
 
     // Инициализация RFFT (для вещественного входа)
     status = arm_rfft_fast_init_f32(&fft_instance, ICS_BUFFER);
@@ -264,21 +317,21 @@ int main(void)
 
 
 
-  adxl345spi1.dataindex = 0;
-  adxl345spi1.hspi = hspi1;
-  adxl345spi1.cs_port = GPIOA;
-  adxl345spi1.cs_pin = GPIO_PIN_10;
-  adxl345spi1.fft_samples = 3200;
+//  adxl345spi1.dataindex = 0;
+//  adxl345spi1.hspi = hspi1;
+//  adxl345spi1.cs_port = GPIOA;
+//  adxl345spi1.cs_pin = GPIO_PIN_10;
+ // adxl345spi1.fft_samples = 3200;
 
-  adxl345spi2.dataindex = 0;
-  adxl345spi2.hspi = hspi2;
-  adxl345spi2.cs_port = GPIOB;
-  adxl345spi2.cs_pin = GPIO_PIN_7;
-  adxl345spi2.fft_samples = 3200;
+ // adxl345spi2.dataindex = 0;
+ // adxl345spi2.hspi = hspi2;
+ // adxl345spi2.cs_port = GPIOB;
+//  adxl345spi2.cs_pin = GPIO_PIN_7;
+//  adxl345spi2.fft_samples = 3200;
 
 
-  ADXL345_Init_Calib(&adxl345spi1);
-  ADXL345_Init_Calib(&adxl345spi2);
+//  ADXL345_Init_Calib(&adxl345spi1);
+//  ADXL345_Init_Calib(&adxl345spi2);
 
   stop_flag=0;
 
@@ -305,15 +358,15 @@ int main(void)
 		//  stop_flag=2;
 	  };
 
-    	for (int i = 0; i < ICS_BUFFER_RAW; i += 2) {  buf2[i / 2]=i2s_buf[i]+1; };
-	  ics_freq = ICS43434_FFT(buf2,48000);
+    //	for (int i = 0; i < ICS_BUFFER_RAW; i += 2) {  buf2[i / 2]=i2s_buf[i]+1; };
+	  ics_freq = ICS43434_FFT();
 
-	  ADXL345_FFT(&adxl345spi1);
-	  ADXL345_FFT(&adxl345spi2);
+	//  ADXL345_FFT(&adxl345spi1);
+	//  ADXL345_FFT(&adxl345spi2);
 
 	    for (int i = 0; i < ADXL345DATA_DATALENGTH; i++) {
-	    	b2zdata[2*i]     =  ((float)( adxl345spi1.zdata[i] - adxl345spi1.offsetz ))*adxl345spi1.scale;
-	    	b2zdata[2*i+1] =  ((float)( adxl345spi2.zdata[i] - adxl345spi2.offsetz ))*adxl345spi2.scale;
+	 //   	b2zdata[2*i]     =  ((float)( adxl345spi1.zdata[i] - adxl345spi1.offsetz ))*adxl345spi1.scale;
+	 //   	b2zdata[2*i+1] =  ((float)( adxl345spi2.zdata[i] - adxl345spi2.offsetz ))*adxl345spi2.scale;
 	    }
 
 	   adxl_freq = ADXL345_FFT_qwen(b2zdata,2*ADXL345DATA_DATALENGTH, 6400);
@@ -328,7 +381,7 @@ int main(void)
 		  if((cmdbuf[0] == 'B') && (cmdbuf[3] == 'Z'))
 		  {
 			  cmdbuf[0] = 0;
-			  Buffer_Transmit((uint8_t *)buf2,2*ICS_BUFFER,500);
+			//  Buffer_Transmit((uint8_t *)buf2,2*ICS_BUFFER,500);
 		  };
 
 
@@ -359,7 +412,7 @@ int main(void)
 		  if((cmdbuf[0] == 'G') && (cmdbuf[3] == 'Z'))
 		  {
 			  cmdbuf[0] = 0;
-			  Buffer_Transmit((uint8_t *)adxl345spi1.zdata,2*ADXL345DATA_DATALENGTH,500);
+			//  Buffer_Transmit((uint8_t *)adxl345spi1.zdata,2*ADXL345DATA_DATALENGTH,500);
 		  };
 
 
