@@ -50,7 +50,7 @@ struct BTstruct{
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define  ICS_BUFFER_RAW   (1024)
+#define  ICS_BUFFER_RAW   ( 4*1024)
 #define  ICS_BUFFER 	  (ICS_BUFFER_RAW / 2)
 #define  ICS_BUFFER_FFT   (ICS_BUFFER / 2 + 1)
 /* USER CODE END PD */
@@ -74,6 +74,15 @@ TIM_HandleTypeDef htim3;
 uint8_t cmdbuf[4];
 uint8_t stop_flag;
 uint16_t i2s_buffercount = 0;
+
+arm_status status;
+
+static float32_t fft_input_buffer[ICS_BUFFER];
+float32_t fft_output_buffer[ICS_BUFFER];// Реальный и мнимый — чередуются
+arm_rfft_fast_instance_f32 fft_instance;
+
+//static float32_t fft_input_buffer_out[ICS_BUFFER];
+
 
 struct BTstruct BTUART;
 
@@ -147,7 +156,8 @@ float ICS43434_FFT2(int16_t *in_buf,float fs)  {
     // Преобразуем uint16_t -> float32_t, вычитаем offsetz
     for (int i = 0; i < ICS_BUFFER; i++) {
         fft_input_buffer[i] = (float32_t)(in_buf[i]);
-   // 	fft_input_buffer[i] = (float32_t)(sin(20.0*(float)i/(float)(ICS_BUFFER)*2.0*3.14159));
+   //     fft_input_buffer_out[i] = (float32_t)(in_buf[i]);
+      // 	fft_input_buffer[i] = (float32_t)(sin(20.0*(float)i/(float)(ICS_BUFFER)*2.0*3.14159));
     }
 
     // Инициализация RFFT (для вещественного входа)
@@ -185,30 +195,22 @@ float ICS43434_FFT2(int16_t *in_buf,float fs)  {
 float ICS43434_FFT()  {
 
     // Указатели на буферы
-    static float32_t fft_input_buffer[ICS_BUFFER];
-    float32_t fft_output_buffer[ICS_BUFFER];// Реальный и мнимый — чередуются
 
     float fs = (float)hi2s3.Init.AudioFreq;
 
     // Инициализация FFT
-    arm_rfft_fast_instance_f32 fft_instance;
-    arm_status status;
 
-    for (int i = 0; i < ICS_BUFFER_RAW; i += 2) {
-    	fft_input_buffer[i / 2]=i2s_buf[i]+1;
+
+    int j = 0;
+    float32_t raw = 0;
+    for (int i = 0; i < ICS_BUFFER; i++) {
+        raw = (float32_t )i2s_buf[j];
+    	fft_input_buffer[i]= raw;
+   // 	fft_input_buffer_out[i]= raw;
+    	j++;
+    	j++;
     };
 
-    // Преобразуем uint16_t -> float32_t, вычитаем offsetz
-   // for (int i = 0; i < ICS_BUFFER; i++) {
-      //  fft_input_buffer[i] = (float32_t)(in_buf[i]);
-   // 	fft_input_buffer[i] = (float32_t)(sin(20.0*(float)i/(float)(ICS_BUFFER)*2.0*3.14159));
-    //}
-
-    // Инициализация RFFT (для вещественного входа)
-    status = arm_rfft_fast_init_f32(&fft_instance, ICS_BUFFER);
-    if (status != ARM_MATH_SUCCESS) {
-        return 0; // Ошибка инициализации
-    }
 
     // Выполнение прямого FFT
     arm_rfft_fast_f32(&fft_instance, fft_input_buffer, fft_output_buffer, 0); // 0 = прямое преобразование
@@ -333,6 +335,13 @@ int main(void)
 //  ADXL345_Init_Calib(&adxl345spi1);
 //  ADXL345_Init_Calib(&adxl345spi2);
 
+  // Инициализация RFFT (для вещественного входа)
+  status = arm_rfft_fast_init_f32(&fft_instance, ICS_BUFFER);
+  if (status != ARM_MATH_SUCCESS) {
+     while(1){;};; // Ошибка инициализации
+  }
+
+
   stop_flag=0;
 
   HAL_TIM_Base_Start_IT(&htim3);
@@ -346,17 +355,17 @@ int main(void)
   while (1)
   {
 
-	  if (stop_flag==1) {
+	 // if (stop_flag==1) {
 		//  HAL_TIM_Base_Stop_IT(&htim3);
 		//  rdma = HAL_I2S_DMAPause(&hi2s3);
 
-	  }
+	 // }
 
-	  if (stop_flag==0) {
+	//  if (stop_flag==0) {
 		//  HAL_TIM_Base_Start_IT(&htim3);
 		//  HAL_I2S_DMAResume(&hi2s3);
 		//  stop_flag=2;
-	  };
+	//  };
 
     //	for (int i = 0; i < ICS_BUFFER_RAW; i += 2) {  buf2[i / 2]=i2s_buf[i]+1; };
 	  ics_freq = ICS43434_FFT();
@@ -364,24 +373,27 @@ int main(void)
 	//  ADXL345_FFT(&adxl345spi1);
 	//  ADXL345_FFT(&adxl345spi2);
 
-	    for (int i = 0; i < ADXL345DATA_DATALENGTH; i++) {
+	//    for (int i = 0; i < ADXL345DATA_DATALENGTH; i++) {
 	 //   	b2zdata[2*i]     =  ((float)( adxl345spi1.zdata[i] - adxl345spi1.offsetz ))*adxl345spi1.scale;
 	 //   	b2zdata[2*i+1] =  ((float)( adxl345spi2.zdata[i] - adxl345spi2.offsetz ))*adxl345spi2.scale;
-	    }
+	 //   }
 
-	   adxl_freq = ADXL345_FFT_qwen(b2zdata,2*ADXL345DATA_DATALENGTH, 6400);
+	 //  adxl_freq = ADXL345_FFT_qwen(b2zdata,2*ADXL345DATA_DATALENGTH, 6400);
 
 
 		  if((cmdbuf[0] == 'A') && (cmdbuf[3] == 'Z'))
 		  {
 			  cmdbuf[0] = 0;
-			  Buffer_Transmit((uint8_t *)i2s_buf,2*ICS_BUFFER_RAW,500);
+
+		//	  Buffer_Transmit((uint8_t *)fft_input_buffer_out,4*ICS_BUFFER,4*ICS_BUFFER);
 		  };
 
 		  if((cmdbuf[0] == 'B') && (cmdbuf[3] == 'Z'))
 		  {
 			  cmdbuf[0] = 0;
 			//  Buffer_Transmit((uint8_t *)buf2,2*ICS_BUFFER,500);
+			  //Buffer_Transmit((uint8_t *)i2s_buf,2*ICS_BUFFER_RAW,500);
+		//	  Buffer_Transmit((uint8_t *)fft_input_buffer_out,4*ICS_BUFFER,4*ICS_BUFFER);
 		  };
 
 
@@ -412,7 +424,8 @@ int main(void)
 		  if((cmdbuf[0] == 'G') && (cmdbuf[3] == 'Z'))
 		  {
 			  cmdbuf[0] = 0;
-			//  Buffer_Transmit((uint8_t *)adxl345spi1.zdata,2*ADXL345DATA_DATALENGTH,500);
+			   //Buffer_Transmit((uint8_t *)adxl345spi1.zdata,2*ADXL345DATA_DATALENGTH,500);
+			   Buffer_Transmit((uint8_t *)i2s_buf,2*ICS_BUFFER_RAW,500);
 		  };
 
 

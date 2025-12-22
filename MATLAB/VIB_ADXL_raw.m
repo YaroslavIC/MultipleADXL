@@ -24,11 +24,11 @@ duration2_spk = 3;        % Длительность воспроизведен�
 fs_ics = 48000;
 
  
-freqset = linspace(200,8000,200);
+freqset = linspace(12000,15000,3);
 %freqset = [1000];
 
 if length(freqset)>2
-  videoFile = VideoWriter('C:\Users\SuperHero\git\STM32\MultipleADXL\MATLAB\real_data10.mp4', 'MPEG-4');
+  videoFile = VideoWriter('C:\Users\SuperHero\git\STM32\MultipleADXL\MATLAB\real_data142.mp4', 'MPEG-4');
   videoFile.FrameRate = 10; % Частота кадров
   open(videoFile);
 end
@@ -54,8 +54,8 @@ while i<=length(freqset)
   pause(2);
 
  
-  ICS_BUFFER_RAW       = GetDataRawFmt(device,['A' 0 0 'Z'], "int16");
-  ICS_BUFFER           = GetDataRawFmt(device,['B' 0 0 'Z'], "int16");
+%  ICS_BUFFER_RAW       = GetDataRawFmt(device,['A' 0 0 'Z'], "single");
+%  ICS_BUFFER           = GetDataRawFmt(device,['B' 0 0 'Z'], "single");
   ICS_BUFFER_FFT       = GetDataRawFmt(device,['C' 0 0 'Z'], "single");
   ADXL345DATA_2BUF     = GetDataRawFmt(device,['D' 0 0 'Z'], "single");
   ADXL345DATA_1BUF     = GetDataRawFmt(device,['G' 0 0 'Z'], "int16");
@@ -78,13 +78,13 @@ while i<=length(freqset)
   ICS_BUFFER_FFT_X = linspace(0,fs_ics/2,length(ICS_BUFFER_FFT));
   plot(ICS_BUFFER_FFT_X(3:end),   ICS_BUFFER_FFT(3:end));
   [f,Pout2,phase,Y]=myFFT(0,ICS_BUFFER,fs_ics);
-  plot(f(3:end),Pout2(3:end),'.'); xlim([0 8000])
+  plot(f(3:end),Pout2(3:end),'.'); xlim([0 21000])
   line([f_spk f_spk],[0.5*max([ICS_BUFFER_FFT(3:end)' Pout2']) 0.35*max([ICS_BUFFER_FFT(3:end)' Pout2'])],'Color',[0.6350 0.0780 0.1840],'LineWidth',3);
   ylabel('ICS STM32-FFT,MATLAB-FFT');
   yyaxis right
   [f,Pout3,phase,Y]=myFFT(0,audioData,fs2_spk);
   ylabel('USBMic MATLAB-FFT');
-  plot(f,Pout3); xlim([0 8000])
+  plot(f,Pout3); xlim([0 21000])
   title('ICS43434 FFT-STM32/FFT-MATLAB USBMic-FFT-MATLAB  (Г:'+string(f_spk)+' Гц)');
   xlabel('Частота, Гц');
 
